@@ -54,7 +54,7 @@ class Application(tk.Frame):
     def __init__(self, master=None):
         super().__init__(master)
         self.master = master
-        self.master.title("Audio GIF Converter 3.0")
+        self.master.title("GifBeats")
         self.master.geometry("600x600")
         self.master.configure(bg="#1f1f1f")
         self.configure(bg="#1f1f1f")

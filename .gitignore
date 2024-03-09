@@ -2,3 +2,6 @@ __pycache__/
 dist/
 build/
 *.pyc
+
+/requirements.txt
+/GifBeats.spec
