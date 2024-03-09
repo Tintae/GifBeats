@@ -62,22 +62,14 @@ class YouTubeUploaderFrame(tk.Toplevel):
             padding=5,
         )
         style.configure(
-            "Treeview",
+            "TCombobox",
             background="#4d4d4d",
             foreground="#ffffff",
             fieldbackground="#4d4d4d",
+            selectbackground="#ff5500",
+            selectforeground="#ffffff",
             font=("Helvetica", 12),
-            rowheight=25,
-        )
-        style.configure(
-            "Treeview.Heading",
-            background="#ff5500",
-            foreground="#ffffff",
-            font=("Helvetica", 12, "bold"),
-        )
-        style.map(
-            "Treeview.Heading",
-            background=[("active", "#ff8c00")],
+            padding=5,
         )
 
         self.title_label = ttk.Label(self, text="Title:")
@@ -110,7 +102,7 @@ class YouTubeUploaderFrame(tk.Toplevel):
         CreateToolTip(self.privacy_label, "Select the privacy setting for your video")
 
         self.privacy_var = tk.StringVar(value="private")
-        self.privacy_frame = ttk.Frame(self)
+        self.privacy_frame = ttk.Frame(self, style="TFrame")
         self.privacy_frame.pack(side="top", pady=5)
 
         self.private_radio = ttk.Radiobutton(
@@ -130,7 +122,10 @@ class YouTubeUploaderFrame(tk.Toplevel):
         self.unlisted_radio.pack(side="left", padx=5)
 
         self.public_radio = ttk.Radiobutton(
-            self.privacy_frame, text="Public", variable=self.privacy_var, value="public"
+            self.privacy_frame,
+            text="Public",
+            variable=self.privacy_var,
+            value="public",
         )
         self.public_radio.pack(side="left", padx=5)
 
@@ -141,7 +136,7 @@ class YouTubeUploaderFrame(tk.Toplevel):
             "Select the date and time to schedule your video (optional)",
         )
 
-        self.schedule_frame = ttk.Frame(self)
+        self.schedule_frame = ttk.Frame(self, style="TFrame")
         self.schedule_frame.pack(side="top", pady=5)
 
         self.date_label = ttk.Label(self.schedule_frame, text="Date:")
@@ -149,34 +144,35 @@ class YouTubeUploaderFrame(tk.Toplevel):
         self.date_entry = DateEntry(
             self.schedule_frame,
             width=12,
-            background="darkblue",
-            foreground="white",
-            borderwidth=2,
+            background="#4d4d4d",
+            foreground="#ffffff",
+            borderwidth=0,
+            font=("Helvetica", 12),
         )
         self.date_entry.pack(side="left", padx=5)
 
         self.time_label = ttk.Label(self.schedule_frame, text="Time:")
         self.time_label.pack(side="left", padx=5)
 
-        # Generate time options in 30-minute intervals
+        # Generate time options in 30-minute intervals (AM/PM format)
         current_time = datetime.datetime.now().replace(
             minute=0, second=0, microsecond=0
         )
         time_options = []
         for _ in range(48):
-            time_options.append(current_time.strftime("%H:%M"))
+            time_options.append(current_time.strftime("%I:%M %p"))
             current_time += datetime.timedelta(minutes=30)
 
         self.time_combobox = ttk.Combobox(
-            self.schedule_frame, width=8, values=time_options
+            self.schedule_frame, width=8, values=time_options, style="TCombobox"
         )
         self.time_combobox.pack(side="left", padx=5)
 
-        self.upload_button = ttk.Button(self, text="Upload", command=self.start_upload)
+        self.upload_button = ttk.Button(self, text="Upload", command=self.start_upload, style="TButton")
         self.upload_button.pack(side="top", pady=20)
         CreateToolTip(self.upload_button, "Start the video upload to YouTube")
 
-        self.cancel_button = ttk.Button(self, text="Cancel", command=self.destroy)
+        self.cancel_button = ttk.Button(self, text="Cancel", command=self.destroy, style="TButton")
         self.cancel_button.pack(side="top", pady=10)
         CreateToolTip(self.cancel_button, "Cancel the upload and close the window")
 
@@ -206,7 +202,21 @@ class YouTubeUploaderFrame(tk.Toplevel):
         schedule_time = self.time_combobox.get()
 
         if schedule_date and schedule_time:
-            publish_at = f"{schedule_date.isoformat()}T{schedule_time}:00.000Z"
+            # Convert the selected date and time to a datetime object
+            schedule_datetime = datetime.datetime.combine(
+                schedule_date,
+                datetime.datetime.strptime(schedule_time, "%I:%M %p").time()
+            )
+            # Ensure the scheduled time is in the future
+            if schedule_datetime <= datetime.datetime.now():
+                messagebox.showerror(
+                    "Error",
+                    "The scheduled time must be in the future.",
+                )
+                return
+            # Format the datetime object as an ISO 8601 timestamp (assuming UTC)
+            publish_at = schedule_datetime.strftime("%Y-%m-%dT%H:%M:%S+00:00")
+            print(f"Scheduled publish time: {publish_at}")  # Debugging line
         else:
             publish_at = None
 
@@ -276,6 +286,14 @@ class YouTubeUploader:
         return build("youtube", "v3", credentials=credentials)
 
     def upload_video(self):
+        # Parameter validation
+        if not self.title or not self.description or not self.video_path:
+            messagebox.showerror(
+                "Error",
+                "Please provide a title, description, and video file.",
+            )
+            return
+
         body = {
             "snippet": {
                 "title": self.title,
@@ -285,9 +303,11 @@ class YouTubeUploader:
             },
             "status": {
                 "privacyStatus": self.privacy_status,
-                "publishAt": self.publish_at,
             },
         }
+
+        if self.publish_at:
+            body["status"]["publishAt"] = self.publish_at
 
         insert_request = self.youtube.videos().insert(
             part=",".join(body.keys()),
@@ -296,9 +316,27 @@ class YouTubeUploader:
         )
 
         response = None
-        while response is None:
-            status, response = insert_request.next_chunk()
-            if status:
-                print(f"Uploaded {int(status.progress() * 100)}%.")
+        error = None
+        try:
+            while response is None:
+                status, response = insert_request.next_chunk()
+                if status:
+                    print(f"Uploaded {int(status.progress() * 100)}%.")
+        except googleapiclient.errors.ResumableUploadError as e:
+            error = e
+            print(f"Error: {e}")
 
-        print(f"Video uploaded successfully. Video ID: {response['id']}")
+        if error:
+            if "quotaExceeded" in str(error):
+                messagebox.showerror(
+                    "Error",
+                    "Upload failed. You have exceeded your YouTube API quota. Please wait until your quota resets or request an increase in your API quota.",
+                )
+            else:
+                messagebox.showerror(
+                    "Error",
+                    f"Upload failed. Please check the scheduling format and try again.\n\nError details: {error}",
+                )
+        else:
+            print(f"Video uploaded successfully. Video ID: {response['id']}")
+            messagebox.showinfo("Success", "Video uploaded successfully!")
