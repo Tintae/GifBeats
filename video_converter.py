@@ -7,6 +7,10 @@ import tkinter as tk
 from tkinter import ttk
 from youtube_uploader import YouTubeUploaderFrame
 from settings_window import SettingsWindow
+import tkinter as tk
+from tkinter import ttk
+from utils import CreateToolTip
+
 
 def create_video(audio_path, gif_path, output_path, progress_queue, settings):
     try:
@@ -45,10 +49,6 @@ def create_video(audio_path, gif_path, output_path, progress_queue, settings):
     except Exception as e:
         messagebox.showerror("Error", f"Failed to create video: {e}")
         progress_queue.put(-1)
-
-import tkinter as tk
-from tkinter import ttk
-from utils import CreateToolTip
 
 class Application(tk.Frame):
     def __init__(self, master=None):
