@@ -13,6 +13,7 @@ from tkcalendar import DateEntry
 import datetime
 import webbrowser
 import tkinter as tk
+import googleapiclient
 
 class YouTubeUploaderFrame(tk.Toplevel):
     def __init__(self, master=None, video_path=None):
@@ -168,6 +169,16 @@ class YouTubeUploaderFrame(tk.Toplevel):
         )
         self.time_combobox.pack(side="left", padx=5)
 
+        self.timezone_label = ttk.Label(self.schedule_frame, text="Time Zone:")
+        self.timezone_label.pack(side="left", padx=5)
+
+        timezone_options = ["Eastern", "Central", "Western"]
+        self.timezone_var = tk.StringVar(value="Eastern")
+        self.timezone_combobox = ttk.Combobox(
+            self.schedule_frame, width=8, textvariable=self.timezone_var, values=timezone_options, style="TCombobox"
+        )
+        self.timezone_combobox.pack(side="left", padx=5)
+
         self.upload_button = ttk.Button(self, text="Upload", command=self.start_upload, style="TButton")
         self.upload_button.pack(side="top", pady=20)
         CreateToolTip(self.upload_button, "Start the video upload to YouTube")
@@ -200,23 +211,38 @@ class YouTubeUploaderFrame(tk.Toplevel):
 
         schedule_date = self.date_entry.get_date()
         schedule_time = self.time_combobox.get()
+        selected_timezone = self.timezone_var.get()
+
+        if selected_timezone == "Eastern":
+            local_timezone = datetime.timezone(datetime.timedelta(hours=-4))
+        elif selected_timezone == "Central":
+            local_timezone = datetime.timezone(datetime.timedelta(hours=-5))
+        elif selected_timezone == "Western":
+            local_timezone = datetime.timezone(datetime.timedelta(hours=-7))
 
         if schedule_date and schedule_time:
-            # Convert the selected date and time to a datetime object
-            schedule_datetime = datetime.datetime.combine(
-                schedule_date,
-                datetime.datetime.strptime(schedule_time, "%I:%M %p").time()
-            )
-            # Ensure the scheduled time is in the future
-            if schedule_datetime <= datetime.datetime.now():
+            try:
+                schedule_datetime = datetime.datetime.combine(schedule_date,
+                                                              datetime.datetime.strptime(schedule_time, "%I:%M %p").time())
+                schedule_datetime = schedule_datetime.replace(tzinfo=local_timezone)
+
+                current_datetime = datetime.datetime.now(local_timezone)
+                if schedule_datetime <= current_datetime:
+                    messagebox.showerror(
+                        "Error",
+                        "Scheduled time must be in the future."
+                    )
+                    return
+
+                publish_at = schedule_datetime.astimezone(datetime.timezone.utc).isoformat()
+
+            except ValueError:
                 messagebox.showerror(
                     "Error",
-                    "The scheduled time must be in the future.",
+                    "Invalid scheduling format. Please use the provided date and time pickers."
                 )
                 return
-            # Format the datetime object as an ISO 8601 timestamp (assuming UTC)
-            publish_at = schedule_datetime.strftime("%Y-%m-%dT%H:%M:%S+00:00")
-            print(f"Scheduled publish time: {publish_at}")  # Debugging line
+
         else:
             publish_at = None
 
@@ -229,6 +255,8 @@ class YouTubeUploaderFrame(tk.Toplevel):
                 "token_uri": "https://oauth2.googleapis.com/token",
             }
         }
+
+        print(f"Privacy status: {privacy_status}")  # Add this line to check the privacy status
 
         uploader = YouTubeUploader(
             self.video_path,
@@ -245,6 +273,10 @@ class YouTubeUploaderFrame(tk.Toplevel):
         self.title_entry.delete(0, tk.END)
         self.description_entry.delete(0, tk.END)
         self.tags_entry.delete(0, tk.END)
+
+    def show_success_message(self, video_id):
+        message = f"Video uploaded successfully!\nClick the link to view the video:\nhttps://www.youtube.com/watch?v={video_id}"
+        messagebox.showinfo("Success", message)
 
 
 class YouTubeUploader:
@@ -315,6 +347,7 @@ class YouTubeUploader:
             media_body=MediaFileUpload(self.video_path, chunksize=-1, resumable=True),
         )
 
+        print("Starting video upload...")
         response = None
         error = None
         try:
@@ -339,4 +372,6 @@ class YouTubeUploader:
                 )
         else:
             print(f"Video uploaded successfully. Video ID: {response['id']}")
+            print(f"Video privacy status: {response['status']['privacyStatus']}")
+            print(f"Video publish time: {response['status'].get('publishAt', 'Not scheduled')}")
             messagebox.showinfo("Success", "Video uploaded successfully!")
