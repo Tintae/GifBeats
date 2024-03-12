@@ -5,7 +5,8 @@ from tkinter import filedialog, messagebox
 from utils import CreateToolTip, load_api_keys, save_api_keys
 import tkinter as tk
 from tkinter import ttk
-from youtube_uploader import YouTubeUploaderFrame
+from uploader import UploaderFrame
+from youtube_uploader import YouTubeUploader
 from settings_window import SettingsWindow
 import tkinter as tk
 from tkinter import ttk
@@ -41,7 +42,7 @@ def create_video(audio_path, gif_path, output_path, progress_queue, settings):
             output_path,
             codec="libx264",
             audio_codec="aac",
-            fps=24,
+            fps=30,
         )
         progress_queue.put(100)
 
@@ -259,4 +260,4 @@ class Application(tk.Frame):
         self.master.wait_window(settings_window)
 
     def open_youtube_uploader(self):
-        self.youtube_frame = YouTubeUploaderFrame(self.master, self.output_entry.get())
+        self.youtube_frame = UploaderFrame(self.master, self.output_entry.get())
