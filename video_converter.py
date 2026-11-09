@@ -43,6 +43,11 @@ def create_video(audio_path, gif_path, output_path, progress_queue, settings):
             codec="libx264",
             audio_codec="aac",
             fps=30,
+            bitrate="20000k",
+            preset="veryslow",
+            ffmpeg_params=["-crf", "17"],
+            audio_bitrate="384k",
+            threads=4
         )
         progress_queue.put(100)
 
